@@ -39,6 +39,32 @@ python3 code/main.py
 
 The blank template at `dataset/output.csv` is provided as a reference. Your final generated file for submission must be the root-level `output.csv`.
 
+---
+
+## Approach Overview and Architecture
+
+Our AI deletion-audit agent implements a four-stage deterministic reasoning architecture:
+
+1. **Intent Classification & Authorization:**
+   - Evaluates `request_text` across multiple languages to verify if the subject authorized personal data deletion.
+   - Non-deletion requests (e.g. data access, portability exports, or marketing opt-outs) are classified as `NOT_APPLICABLE` with `steps_json = []`. Exactly 10 evaluation cases are non-deletion requests.
+
+2. **Temporal Identity Graph Resolution:**
+   - Joins `user_identities.csv` with `user_audit_log.csv` to map the subject's complete historical identity graph: current email, historical emails, phone numbers, full names, and SHA-256 email hashes (from historical audit events).
+
+3. **Multi-Modal Evidence & Activity Correlation:**
+   - Treats workflow status claims (`reported_status`) as unverified claims and inspects raw physical evidence under `dataset/evidence/` (SQLite replica snapshots, structured service event logs, JSON records, documents).
+   - Strictly applies temporal filtering: only evidence captured at or before `audit_at` is evaluated. Later evidence is ignored to prevent temporal leakage.
+   - Traces distributed deletion batches across `system_activity.csv` starting from `account_service` and linking secondary services (`search_service`, `support_platform`, `analytics_platform`, `backup_service`).
+
+4. **Policy Enforcement & Step Ordering:**
+   - Evaluates records against `deletion_rules.csv` to verify whether data was deleted, redacted, anonymized, or retained as an `ACCOUNT_TOMBSTONE` (preserving stable internal references while stripping direct PII).
+   - Orders all actions strictly by phase: `FINDING` -> `REMEDIATION` -> `VERIFICATION`.
+   - Generates safe remediation dependencies: disabling data flow pipelines and blocking restores before modifying downstream replicas.
+
+---
+
+
 
 ## Dataset
 
